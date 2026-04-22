@@ -1,4 +1,4 @@
-// Endpoint open meteo api
+// Endpoint open meteo api: Definición de una constante con la URL base de la API (Endpoint) para peticiones posteriores
 const OPEN_METEO_API = "https://api.open-meteo.com/v1/forecast"
 
 // Elementos del DOM
@@ -25,25 +25,25 @@ const humidity = document.getElementById("humidity") // humedad
 const cloudCover = document.getElementById("cloudCover") // nubosidad
 const apparentTemp = document.getElementById("apparentTemp") // sensación térmica
 
-// Pronóstico
+// Pronóstico de los próximos 5 días
 const forecastContainer = document.getElementById("forecastContainer") // div donde mostraremos el pronóstico
 
-// ---------- Funciones Helpers ----------
+// ---------- Funciones Helpers (utlidades reutilizables) ----------
 
 // Mostrar/ocultar loading
 function toggleLoading(loadingElement, show) {
-  loadingElement.classList.toggle("hidden", !show)
+  loadingElement.classList.toggle("hidden", !show) // .toggle añade o quita la clase "hidden" según el valor booleano de !show
 }
 
 // Mostrar error
 
 function mostrarError(errorElement, mensaje) {
   errorElement.textContent = `${mensaje}`
-  errorElement.classList.remove("hidden")
+  errorElement.classList.remove("hidden") //hace visible el mensaje de error
 
   setTimeout(() => {
     errorElement.classList.add("hidden")
-  }, 5000)
+  }, 5000) // Temporizador (Closure) que oculta el error después de 5000ms (5 segundos)
 }
 
 // Obtener el icono según el código meteorológico (WMO Weather interpretation codes)
@@ -75,7 +75,7 @@ function obtenerIconoTiempo(weatherCode) {
     99: "⛈️", // Thunderstorm with heavy hail
   }
 
-  return weatherIcons[weatherCode] || "🌡️"
+  return weatherIcons[weatherCode] || "🌡️" // Retorna el icono correspondiente o uno por defecto si el código no existe en el objeto
 }
 
 // Obtener descripción según código meteorológico
@@ -123,9 +123,8 @@ function formatearFecha(fecha) {
 // ---------- GEOLOCALIZACIÓN ----------
 
 /**
- * PASO 1: Obtener ubicación del usuario con navigator.geolocation
- */
-
+ * PASO 1: Obtener ubicación del usuario con navigator.geolocation */
+// Envuelve la API nativa de geolocalización en una Promesa para poder usar async/await
 function obtenerUbicacionGPS() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -136,9 +135,10 @@ function obtenerUbicacionGPS() {
     const options = {
       enableHighAccuracy: true, // Mayor precisión a la hora de recibir datos
       timeout: 10000, // 10 segundos de timeout (espera máxima para devolver los datos)
-      maximumAge: 0,
+      maximumAge: 0, // No usar datos de ubicación cacheados anteriormente
     }
 
+    // Método nativo que pide permiso al usuario y obtiene la posición (no es de terceros, es parte de la API del navegador)
     navigator.geolocation.getCurrentPosition(
       (position) => {
         resolve(position)
@@ -167,16 +167,15 @@ function obtenerUbicacionGPS() {
 
 /**
  * PASO 2: Obtener nombre de la ubicación (ciudad, barrio) usando coordenadas
- * API: Nominatim (OpenStreetMap) - Reverse Geocoding
- */
-
+ * API: Nominatim (OpenStreetMap) - Reverse Geocoding */
+// Función asíncrona para obtener el nombre de la ciudad mediante Geocodificación Inversa
 async function obtenerNombreUbicacion(latitud, longitud) {
   const url = `https://nominatim.openstreetmap.org/reverse?lat=${latitud}&lon=${longitud}&format=json&addressdetails=1`
 
   try {
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "Weather-App-Exercise",
+        "User-Agent": "Weather-App-Exercise", // Requerido por la política de Nominatim
       },
     })
 
@@ -184,11 +183,12 @@ async function obtenerNombreUbicacion(latitud, longitud) {
       throw new Error(`HTTP Error: ${response.status}`)
     }
 
-    const data = await response.json()
-    console.log("Datos nominatim:", data)
+    const data = await response.json() //Parseamos la respuesta a JSON para poder trabajar con ella como un objeto de JavaScript
+    console.log("Datos nominatim:", data) //REVISIÓN DE CÓMO VAMOS
 
-    const { address, display_name } = data
+    const { address, display_name } = data //Desestructuramos el objeto para obtener la información que necesitamos (ciudad, barrio, país, nombre completo de la ubicación)
 
+    // Lógica para elegir el nombre del lugar priorizando según la jerarquía del objeto address
     return {
       ciudad:
         address.city ||
@@ -211,30 +211,30 @@ async function obtenerNombreUbicacion(latitud, longitud) {
 }
 
 /**
- * PASO 3: Obtener datos del tiempo usando las coordenadas
- */
-
+ * PASO 3: Obtener datos del tiempo usando las coordenadas */
+// Función asíncrona para pedir datos meteorológicos a Open-Meteo
 async function obtenerTiempo(latitud, longitud) {
+  // URLSearchParams ayuda a construir la cadena de consulta (?lat=...&lon=...) de forma limpia y legible, evitando errores de concatenación manual
   const params = new URLSearchParams({
     latitude: latitud,
     longitude: longitud,
     current:
       "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,cloud_cover",
     daily: "weather_code,temperature_2m_max,temperature_2m_min",
-    timezone: "auto",
+    timezone: "auto", // Ajusta la hora según la localización detectada
     forecast_days: 5,
   })
 
   const url = `${OPEN_METEO_API}?${params}`
 
   try {
-    const response = await fetch(url)
+    const response = await fetch(url) // Realiza la petición HTTP GET a la API de Open-Meteo
 
     if (!response.ok) {
       throw new Error(`HTPPS Error: ${response.status}`)
     }
 
-    const data = await response.json()
+    const data = await response.json() // Devuelve los datos procesados en formato JSON para su uso posterior en el renderizado
     return data
   } catch (error) {
     throw new Error(`Error al obtener el tiempo: ${error.message}`)
@@ -242,30 +242,30 @@ async function obtenerTiempo(latitud, longitud) {
 }
 
 /**
- * FUNCIÓN PRINCIPAL: Coordina geolocalización + nombre ubicación + API del tiempo
- */
+ * FUNCIÓN PRINCIPAL: Coordina geolocalización + nombre ubicación + API del tiempo */
 
 async function obtenerUbicacionYTiempo() {
-  // Limpiar
+  // Estado inicial: oculta errores e info previa y muestra el primer spinner
   errorLocation.classList.add("hidden")
   errorWeather.classList.add("hidden")
   infoUbicacion.classList.add("hidden")
   weatherContainer.classList.add("hidden")
 
-  toggleLoading(loadingLocation, true)
+  toggleLoading(loadingLocation, true) //spinner activado para ubicación
 
   try {
-    // PASO 1: Obtener ubicación
+    // PASO 1: Obtener ubicación ejecutando la promesa de geolocalización y esperando su resolución con await
     console.log("Solicitando ubicación...")
     const position = await obtenerUbicacionGPS()
 
-    const { latitude, longitude, accuracy } = position.coords
+    const { latitude, longitude, accuracy } = position.coords // Extrae coordenadas y precisión del objeto position
 
-    latitudElement.textContent = latitude.toFixed(6)
-    longitudElement.textContent = longitude.toFixed(6)
-    precisionElement.textContent = `${Math.round(accuracy)} metros`
+    // Actualiza el DOM con los datos numéricos redondeados
+    latitudElement.textContent = latitude.toFixed(6) // Redondea la latitud a 6 decimales
+    longitudElement.textContent = longitude.toFixed(6) // Redondea la longitud a 6 decimales
+    precisionElement.textContent = `${Math.round(accuracy)} metros` //redondea la precisión a metros enteros
 
-    console.log(`Ubicación obtenida: ${latitude}, ${longitude}`)
+    console.log(`Ubicación obtenida: ${latitude}, ${longitude}`) //REVISIÓN DE CÓMO VAMOS
 
     // PASO 2: Obtener nombre de la ubicación
     console.log("Obteniendo nombre de ubicación...")
@@ -278,23 +278,24 @@ async function obtenerUbicacionYTiempo() {
 
     console.log(`Ubicación: ${ubicacion.ciudad}, ${ubicacion.pais}`)
 
-    infoUbicacion.classList.remove("hidden")
-    toggleLoading(loadingLocation, false)
+    infoUbicacion.classList.remove("hidden") //muestra la info de la ubicación en el DOM
+    toggleLoading(loadingLocation, false) //esconde el spinner de ubicación (el que teníamos activado mientras obteníamos la ubicación)
 
-    // PASO 3: Obtener info del tiempo según localización
+    // PASO 3: Obtener info del tiempo (clima) según localización
     toggleLoading(loadingWeather, true)
     console.log("Consultando tiempo...")
     const weatherData = await obtenerTiempo(latitude, longitude)
 
     console.log("Datos del tiempo obtenidos:", weatherData)
 
-    renderizarTiempo(weatherData)
+    renderizarTiempo(weatherData) //envía los datos a la función de renderizado para mostrar el tiempo actual y el pronóstico en dibujos
 
-    toggleLoading(loadingWeather, false)
-    weatherContainer.classList.remove("hidden")
+    toggleLoading(loadingWeather, false) //esconde el spinner del tiempo (el que teníamos activado mientras obteníamos la info del tiempo)
+    weatherContainer.classList.remove("hidden") //muestra la info del tiempo en el DOM
   } catch (error) {
-    console.log("Error:", error)
+    console.log("Error:", error) //si algo falla en cualquiera de los pasos anteriores, se captura el error aquí y se muestra el mensaje correspondiente en el DOM según el paso donde haya ocurrido el error
 
+    // Decide en qué sección mostrar el error según en qué punto se quedó el proceso
     if (infoUbicacion.classList.contains("hidden")) {
       toggleLoading(loadingLocation, false)
       mostrarError(errorLocation, error.message)
@@ -305,13 +306,13 @@ async function obtenerUbicacionYTiempo() {
   }
 }
 
-// ---------- RENDERIZADO ----------
+// ---------- RENDERIZADO (pintar en pantalla) ---------------------------
 
 /**
- * Renderizar los datos del tiempo en el DOM
- */
-
+ * Renderizar los datos del tiempo en el DOM */
+// Toma los datos "actuales" y los inyecta en los elementos del DOM correspondientes, además de llamar a la función que renderiza el pronóstico de los próximos días
 function renderizarTiempo(data) {
+  // Desestructuración de los datos recibidos de la API (current) para obtener solo lo que necesitamos y trabajar con variables más limpias
   const {
     temperature_2m,
     relative_humidity_2m,
@@ -321,6 +322,7 @@ function renderizarTiempo(data) {
     cloud_cover,
   } = data.current
 
+  // Asignación de valores procesados a cada elemento visual del DOM para mostrar el tiempo actual de forma clara y legible para el usuario
   weatherIcon.textContent = obtenerIconoTiempo(weather_code)
   temperature.textContent = `${Math.round(temperature_2m)}ºC`
   weatherDescription.textContent = obtenerDescripcionTiempo(weather_code)
@@ -330,24 +332,24 @@ function renderizarTiempo(data) {
   cloudCover.textContent = `${cloud_cover}%`
   apparentTemp.textContent = `${Math.round(apparent_temperature)}ºC`
 
-  renderizarPronostico(data.daily)
+  renderizarPronostico(data.daily)  // Llama a la siguiente función para procesar la lista de días
 }
 
 /**
- * Renderizar el pronóstico de 5 días
- */
+ * Renderizar el pronóstico de 5 días*/
 
 function renderizarPronostico(dailyData) {
   const { time, weather_code, temperature_2m_max, temperature_2m_min } =
     dailyData
 
   const template = time
-    .map((fecha, index) => {
+    .map((fecha, index) => { // .map recorre el array de fechas y crea un array de strings con formato HTML
       const dia = formatearFecha(fecha)
       const icon = obtenerIconoTiempo(weather_code[index])
       const tempMax = Math.round(temperature_2m_max[index])
       const tempMin = Math.round(temperature_2m_min[index])
 
+      // Template Literal: devuelve el bloque de HTML con las variables insertadas
       return `
     <div class="forecast-day">
       <div class="forecast-date">${dia}</div>
@@ -357,11 +359,13 @@ function renderizarPronostico(dailyData) {
   </div>
     `
     })
-    .join("")
+    .join("") // Une todos los strings del array en un solo string gigante
 
+  // Inyecta todo el HTML generado de golpe en el contenedor (más eficiente que múltiples appendChild)
   forecastContainer.innerHTML = template
 }
 
 // ---------- Eventos ----------
 
 btnObtenerUbicacion.addEventListener("click", obtenerUbicacionYTiempo)
+// Escucha el evento "click" en el botón principal para iniciar toda la lógica
